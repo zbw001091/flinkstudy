@@ -80,7 +80,7 @@ public class StreamingJob {
 //		DataStream<Pojo> retailSink = retailSource.keyBy("name").window(TumblingProcessingTimeWindows.of(Time.seconds(5))).sum(field);
 //		retailSink.print();
 		
-		// 用自定义Kafka反序列化器，反序列化为Doss对象
+		// 用自定义Kafka反序列化器，反序列化为Dos对象
 		FlinkKafkaConsumer011<DosKafkaMessagePojo> kafkaConsumer = 
 				new FlinkKafkaConsumer011<DosKafkaMessagePojo>("test", new DosKafkaMessagePojoDeSerializer(), properties);
 		kafkaConsumer.setStartFromLatest();
@@ -125,9 +125,9 @@ public class StreamingJob {
 			retail[0] = 3;
 			retail[1] = 2;
 			retail[2] = 1;
-			brands[0] = "buick";
-			brands[1] = "chevy";
-			brands[2] = "caddy";
+			brands[0] = "bk";
+			brands[1] = "ch";
+			brands[2] = "cd";
 		}
 
 		public static RetailSource create() {
