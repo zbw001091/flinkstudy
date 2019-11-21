@@ -20,6 +20,7 @@ package com.zbw.big.study;
 
 import java.util.Properties;
 
+import org.apache.flink.api.common.functions.FilterFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -30,7 +31,7 @@ import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTime
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer011;
 
-import com.zbw.big.study.pojo.Pojo;
+import com.zbw.big.study.pojo.DosKafkaMessagePojo;
 
 /**
  * Skeleton for a Flink Streaming Job.
@@ -54,9 +55,11 @@ public class StreamingJob {
 		env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime);
 		env.getConfig().setGlobalJobParameters(params);
 		
-		// get input data
+		// manual input data
 //		DataStream<Tuple2<String, Integer>> retailSource;
 //		retailSource = env.addSource(RetailSource.create());
+//		DataStream<Long> retailSink = retailSource.keyBy(0).window(TumblingProcessingTimeWindows.of(Time.seconds(5))).aggregate(new RowAggregate());
+//		retailSink.print();
 		
 		Properties properties = new Properties();
 		properties.setProperty("bootstrap.servers", "localhost:9092");
@@ -64,14 +67,34 @@ public class StreamingJob {
 //		properties.setProperty("zookeeper.connect", "localhost:2181");
 		properties.setProperty("group.id", "testgroup1");
 		
-		// 用SimpleStringSchema做反序列化
+		// 用SimpleStringSchema做Kafka反序列化
 //		DataStream<String> retailSource = env.addSource(new FlinkKafkaConsumer011<>("test", new SimpleStringSchema(), properties));
 		
-		// 用Json做反序列化
+		// 用Json做Kafka反序列化
 //		DataStream<ObjectNode> retailSource = env.addSource(new FlinkKafkaConsumer011<>("test", new JSONKeyValueDeserializationSchema(true), properties));
 		
-		DataStream<Pojo> retailSource = env.addSource(new FlinkKafkaConsumer011<Pojo>("test", new PojoDeSerializer(), properties));
-		DataStream<Pojo> retailSink = retailSource.keyBy("name").window(TumblingProcessingTimeWindows.of(Time.seconds(5))).sum(field);
+		// 用自定义Kafka反序列化器，反序列化为Pojo对象
+//		FlinkKafkaConsumer011<Pojo> kafkaConsumer = new FlinkKafkaConsumer011<Pojo>("test", new PojoDeSerializer(), properties);
+//		kafkaConsumer.setStartFromLatest();
+//		DataStream<Pojo> retailSource = env.addSource(kafkaConsumer);
+//		DataStream<Pojo> retailSink = retailSource.keyBy("name").window(TumblingProcessingTimeWindows.of(Time.seconds(5))).sum(field);
+//		retailSink.print();
+		
+		// 用自定义Kafka反序列化器，反序列化为Doss对象
+		FlinkKafkaConsumer011<DosKafkaMessagePojo> kafkaConsumer = 
+				new FlinkKafkaConsumer011<DosKafkaMessagePojo>("test", new DosKafkaMessagePojoDeSerializer(), properties);
+		kafkaConsumer.setStartFromLatest();
+		DataStream<DosKafkaMessagePojo> retailSource = env.addSource(kafkaConsumer);
+		retailSource = retailSource.filter(new FilterFunction<DosKafkaMessagePojo>() {
+		    @Override
+		    public boolean filter(DosKafkaMessagePojo pojo) throws Exception {
+		    	return "I".equals(pojo.getOpType());
+		    }
+		});
+		// 每5秒，按照table名分keyed小组，进行count(*)，写RDBMS记录
+		DataStream<Tuple2<String, Long>> retailSink = retailSource.keyBy("table") // keyedStream
+													.window(TumblingProcessingTimeWindows.of(Time.seconds(5))) // windowAssigner+defaultWindowTrigger
+													.aggregate(new RowAggregate()); //windowFunction
 		retailSink.print();
 		
 //		DataStream<Tuple2<String, Integer>> retailSink = retailSource.keyBy(0).window(TumblingProcessingTimeWindows.of(Time.seconds(5))).sum(1);
